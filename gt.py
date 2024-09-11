@@ -8,6 +8,11 @@ from datetime import datetime
 from io import BytesIO
 from fpdf import FPDF
 
+conn = sqlite3.connect('database_sekolah.db')
+conn = sqlite3.connect('/full/path/to/database_sekolah.db')
+import os
+conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'database_sekolah.db'))
+
 conn = sqlite3.connect('path/to/database_sekolah.db')
 c.execute('''
     CREATE TABLE IF NOT EXISTS students (
