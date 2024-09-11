@@ -8,6 +8,44 @@ from datetime import datetime
 from io import BytesIO
 from fpdf import FPDF
 
+conn = sqlite3.connect('path/to/database_sekolah.db')
+c.execute('''
+    CREATE TABLE IF NOT EXISTS students (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        age INTEGER
+    )
+''')
+
+import sqlite3
+
+# Connect to SQLite database
+conn = sqlite3.connect('database_sekolah.db')
+c = conn.cursor()
+
+# Create a table if it doesn't exist
+c.execute('''
+    CREATE TABLE IF NOT EXISTS students (
+        id INTEGER PRIMARY KEY,
+        name TEXT,
+        age INTEGER
+    )
+''')
+
+# Commit changes and close connection
+conn.commit()
+conn.close()
+
+import os
+if not os.path.exists('database_sekolah.db'):
+    conn = sqlite3.connect('database_sekolah.db')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS students (
+                     id INTEGER PRIMARY KEY,
+                     name TEXT,
+                     age INTEGER
+                )''')
+
 # Koneksi ke SQLite
 conn = sqlite3.connect('database_sekolah.db')
 c = conn.cursor()
