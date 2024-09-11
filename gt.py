@@ -8,95 +8,45 @@ from datetime import datetime
 from io import BytesIO
 from fpdf import FPDF
 
-conn = sqlite3.connect('database_sekolah.db')
-conn = sqlite3.connect('/full/path/to/database_sekolah.db')
-import os
-conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), 'database_sekolah.db'))
+# Function to get a SQLite connection
+def get_connection():
+    return sqlite3.connect('database_sekolah.db')
 
-conn = sqlite3.connect('path/to/database_sekolah.db')
-c.execute('''
-    CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        age INTEGER
-    )
-''')
-
-import sqlite3
-
-# Connect to SQLite database
-conn = sqlite3.connect('database_sekolah.db')
-c = conn.cursor()
-
-# Create a table if it doesn't exist
-c.execute('''
-    CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        age INTEGER
-    )
-''')
-
-# Commit changes and close connection
-conn.commit()
-conn.close()
-
-import os
-if not os.path.exists('database_sekolah.db'):
-    conn = sqlite3.connect('database_sekolah.db')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS students (
-                     id INTEGER PRIMARY KEY,
-                     name TEXT,
-                     age INTEGER
-                )''')
-
-# Koneksi ke SQLite
-conn = sqlite3.connect('database_sekolah.db')
-c = conn.cursor()
-
-# Buat tabel jika belum ada
-c.execute('''
-CREATE TABLE IF NOT EXISTS pembayaran_spp (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nama_siswa TEXT,
-    kelas TEXT,
-    bulan TEXT,
-    jumlah INTEGER,
-    tanggal TEXT
-)
-''')
-
-c.execute('''
-CREATE TABLE IF NOT EXISTS gaji_guru (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nama_guru TEXT,
-    bulan TEXT,
-    gaji INTEGER,
-    tunjangan INTEGER,
-    tanggal TEXT
-)
-''')
-conn.commit()
-
-# Koneksi ke SQLite
-conn = sqlite3.connect('database_sekolah.db')
-c = conn.cursor()
-
-# Update table schema if the column is missing
-c.execute('''
-ALTER TABLE pembayaran_spp 
-ADD COLUMN IF NOT EXISTS jumlah_pembayaran INTEGER
-''')
-conn.commit()
+# Create tables if they do not exist
+def initialize_db():
+    with get_connection() as conn:
+        c = conn.cursor()
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS pembayaran_spp (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nama_siswa TEXT,
+                kelas TEXT,
+                bulan TEXT,
+                jumlah_pembayaran INTEGER,
+                biaya_spp INTEGER,
+                tanggal TEXT
+            )
+        ''')
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS gaji_guru (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nama_guru TEXT,
+                bulan TEXT,
+                gaji INTEGER,
+                tunjangan INTEGER,
+                tanggal TEXT
+            )
+        ''')
+        conn.commit()
 
 # Initialize in-memory session data
-if "pembayaran_spp" not in st.session_state:
-    st.session_state.pembayaran_spp = pd.DataFrame(columns=["Nama Siswa", "Kelas", "Bulan", "Jumlah Pembayaran", "Biaya SPP/Bulan"])
+def init_session_state():
+    if "pembayaran_spp" not in st.session_state:
+        st.session_state.pembayaran_spp = pd.DataFrame(columns=["Nama Siswa", "Kelas", "Bulan", "Jumlah Pembayaran", "Biaya SPP/Bulan"])
 
-# Function to save SPP payment to CSV and SQL
+# Function to save SPP payment to SQLite and CSV
 def save_pembayaran_spp(nama_siswa, kelas, bulan, jumlah, biaya_spp):
-    # Save to session state
+    tanggal = datetime.now().strftime('%Y-%m-%d')
     new_row = pd.DataFrame({
         "Nama Siswa": [nama_siswa],
         "Kelas": [kelas],
@@ -105,23 +55,23 @@ def save_pembayaran_spp(nama_siswa, kelas, bulan, jumlah, biaya_spp):
         "Biaya SPP/Bulan": [biaya_spp]
     })
     st.session_state.pembayaran_spp = pd.concat([st.session_state.pembayaran_spp, new_row], ignore_index=True)
-    
-    # Save to CSV
     st.session_state.pembayaran_spp.to_csv('pembayaran_spp.csv', index=False)
     
-    # Save to SQLite
-    c.execute("INSERT INTO pembayaran_spp (nama_siswa, kelas, bulan, jumlah_pembayaran, biaya_spp) VALUES (?, ?, ?, ?, ?)", 
-              (nama_siswa, kelas, bulan, jumlah, biaya_spp))
-    conn.commit()
+    with get_connection() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO pembayaran_spp (nama_siswa, kelas, bulan, jumlah_pembayaran, biaya_spp, tanggal) VALUES (?, ?, ?, ?, ?, ?)", 
+                  (nama_siswa, kelas, bulan, jumlah, biaya_spp, tanggal))
+        conn.commit()
 
-# Fungsi untuk menyimpan data gaji guru ke SQLite dan CSV
+# Function to save teacher salary to SQLite and CSV
 def save_gaji_guru(nama_guru, bulan, gaji, tunjangan):
     tanggal = datetime.now().strftime('%Y-%m-%d')
-    c.execute('INSERT INTO gaji_guru (nama_guru, bulan, gaji, tunjangan, tanggal) VALUES (?, ?, ?, ?, ?)',
-              (nama_guru, bulan, gaji, tunjangan, tanggal))
-    conn.commit()
+    with get_connection() as conn:
+        c = conn.cursor()
+        c.execute('INSERT INTO gaji_guru (nama_guru, bulan, gaji, tunjangan, tanggal) VALUES (?, ?, ?, ?, ?)',
+                  (nama_guru, bulan, gaji, tunjangan, tanggal))
+        conn.commit()
     
-    # Simpan juga ke CSV
     df_gaji = pd.DataFrame([{
         'Nama Guru': nama_guru,
         'Bulan': bulan,
@@ -129,63 +79,10 @@ def save_gaji_guru(nama_guru, bulan, gaji, tunjangan):
         'Tunjangan': tunjangan,
         'Tanggal': tanggal
     }])
-
-# Setup untuk judul dan desain sidebar menggunakan option_menu
-with st.sidebar:
-    selected = option_menu(
-        menu_title="Main Menu",  # Judul menu sidebar
-        options=["Pembayaran SPP", "Laporan Keuangan", "Pengelolaan Gaji Guru"],  # Opsi di sidebar
-        icons=["cash-stack", "bar-chart", "person-badge"],  # Ikon untuk setiap opsi
-        menu_icon="cast",  # Ikon untuk menu utama
-        default_index=0,  # Indeks default yang dipilih
-        styles={
-            "container": {"padding": "5!important", "background-color": "#f0f2f6"},  # Desain container
-            "icon": {"color": "orange", "font-size": "25px"},  # Desain ikon
-            "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#eee"},  # Desain link
-            "nav-link-selected": {"background-color": "#4CAF50"},  # Desain link yang dipilih
-        }
-    )
-
-# Konten halaman berdasarkan menu yang dipilih
-if selected == "Pembayaran SPP":
-    st.title("Pembayaran SPP")
-    st.write("Halaman untuk pembayaran SPP siswa.")
-    
-    # Set up SQLite database connection
-    conn = sqlite3.connect('spp_payments.db')
-    c = conn.cursor()
-
-    # Create table if it doesn't exist
-    c.execute('''CREATE TABLE IF NOT EXISTS pembayaran_spp (
-                nama_siswa TEXT, kelas TEXT, bulan TEXT, jumlah_pembayaran INTEGER, biaya_spp INTEGER)''')
-    conn.commit()
-
-    # Initialize in-memory session data
-    if "pembayaran_spp" not in st.session_state:
-        st.session_state.pembayaran_spp = pd.DataFrame(columns=["Nama Siswa", "Kelas", "Bulan", "Jumlah Pembayaran", "Biaya SPP/Bulan"])
-
-# Function to save SPP payment to CSV and SQL
-def save_pembayaran_spp(nama_siswa, kelas, bulan, jumlah, biaya_spp):
-    # Save to session state
-    new_row = pd.DataFrame({
-        "Nama Siswa": [nama_siswa],
-        "Kelas": [kelas],
-        "Bulan": [bulan],
-        "Jumlah Pembayaran": [jumlah],
-        "Biaya SPP/Bulan": [biaya_spp]
-    })
-    st.session_state.pembayaran_spp = pd.concat([st.session_state.pembayaran_spp, new_row], ignore_index=True)
-    
-    # Save to CSV
-    st.session_state.pembayaran_spp.to_csv('pembayaran_spp.csv', index=False)
-    
-    # Save to SQLite
-    c.execute("INSERT INTO pembayaran_spp (nama_siswa, kelas, bulan, jumlah_pembayaran, biaya_spp) VALUES (?, ?, ?, ?, ?)", 
-              (nama_siswa, kelas, bulan, jumlah, biaya_spp))
-    conn.commit()
+    df_gaji.to_csv('gaji_guru.csv', index=False)
 
 # Function to generate payment receipt as a PDF
-def generate_receipt(nama_siswa, kelas, bulan, jumlah, biaya_spp):
+def generate_receipt(nama_siswa, kelas, bulan, jumlah, biaya_spp, filename):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -196,148 +93,132 @@ def generate_receipt(nama_siswa, kelas, bulan, jumlah, biaya_spp):
     pdf.cell(200, 10, txt=f"Jumlah Pembayaran: Rp {jumlah}", ln=True)
     pdf.cell(200, 10, txt=f"Biaya SPP per Bulan: Rp {biaya_spp}", ln=True)
     pdf.cell(200, 10, txt=f"Tanggal: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
-    
-    return pdf
-
-# Setup untuk judul dan desain sidebar menggunakan option_menu
-with st.sidebar:
-    selected = option_menu(
-        menu_title="Main Menu",  # Judul menu sidebar
-        options=["Pembayaran SPP", "Laporan Keuangan", "Pengelolaan Gaji Guru"],  # Opsi di sidebar
-        icons=["cash-stack", "bar-chart", "person-badge"],  # Ikon untuk setiap opsi
-        menu_icon="cast",  # Ikon untuk menu utama
-        default_index=0,  # Indeks default yang dipilih
-        styles={
-            "container": {"padding": "5!important", "background-color": "#f0f2f6"},  # Desain container
-            "icon": {"color": "orange", "font-size": "25px"},  # Desain ikon
-            "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#eee"},  # Desain link
-            "nav-link-selected": {"background-color": "#4CAF50"},  # Desain link yang dipilih
-        }
+    pdf_output = BytesIO()
+    pdf.output(pdf_output)
+    pdf_output.seek(0)
+    st.download_button(
+        label="Download Kwitansi",
+        data=pdf_output,
+        file_name=f"{filename}.pdf",
+        mime="application/pdf"
     )
 
-# Konten halaman berdasarkan menu yang dipilih
-if selected == "Pembayaran SPP":
-    st.title("Pembayaran SPP")
-    st.write("Halaman untuk pembayaran SPP siswa.")
-    
-    # Simulasi input data pembayaran SPP menggunakan form
-    with st.form("pembayaran_form"):
-        nama_siswa = st.text_input("Nama Siswa")
-        kelas = st.selectbox("Kelas", ["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"])
-        bulan = st.selectbox("Bulan", ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"])
-        biaya_spp = st.number_input("Biaya SPP per Bulan (Rp)", min_value=0)
-        jumlah = st.number_input("Jumlah Pembayaran (Rp)", min_value=0)
-        
-        # Tombol submit
-        submitted = st.form_submit_button("Bayar")
-        
-        if submitted:
-            save_pembayaran_spp(nama_siswa, kelas, bulan, jumlah, biaya_spp)
-            st.success(f"Pembayaran SPP untuk {nama_siswa} berhasil ditambahkan!")
-            
-            # Generate PDF receipt
-            pdf = generate_receipt(nama_siswa, kelas, bulan, jumlah, biaya_spp)
-            
-            # Button to download PDF receipt
-            pdf_output = BytesIO()
-            pdf.output(pdf_output)
-            pdf_output.seek(0)
-            st.download_button(
-                label="Download Kwitansi",
-                data=pdf_output,
-                file_name=f"Kwitansi_SPP_{nama_siswa}_{bulan}.pdf",
-                mime="application/pdf"
-            )
-
-    # Pencarian Nama Siswa dan Kelas
-    st.subheader("Pencarian")
-    search_nama = st.text_input("Cari Nama Siswa")
-    search_kelas = st.selectbox("Cari Kelas", ["Semua"] + ["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"])
-
-    # Filter data berdasarkan pencarian
-    filtered_data = st.session_state.pembayaran_spp
-    if search_nama:
-        filtered_data = filtered_data[filtered_data["Nama Siswa"].str.contains(search_nama, case=False)]
-    if search_kelas != "Semua":
-        filtered_data = filtered_data[filtered_data["Kelas"] == search_kelas]
-
-    # Adding columns for Total Tagihan, SPP Terbayar, and Sisa Tagihan
-    filtered_data['Total Tagihan SPP 1 Tahun (Rp)'] = filtered_data['Biaya SPP/Bulan'] * 12
-    filtered_data['SPP yang Sudah Terbayar (Rp)'] = filtered_data.groupby(['Nama Siswa', 'Kelas'])['Jumlah Pembayaran'].transform('sum')
-    filtered_data['Sisa Tagihan SPP (Rp)'] = filtered_data['Total Tagihan SPP 1 Tahun (Rp)'] - filtered_data['SPP yang Sudah Terbayar (Rp)']
-
-    # Tampilkan data pembayaran SPP
-    st.subheader("Data Pembayaran SPP")
-    st.table(filtered_data)
-
-    # Pilihan untuk memilih siswa dari daftar
-    selected_siswa = st.selectbox("Pilih Siswa untuk Kwitansi", options=filtered_data["Nama Siswa"].unique())
-    selected_kelas = st.selectbox("Pilih Kelas", options=filtered_data["Kelas"].unique())
-
-    # Filter data untuk siswa dan kelas yang dipilih
-    siswa_data = filtered_data[(filtered_data["Nama Siswa"] == selected_siswa) & (filtered_data["Kelas"] == selected_kelas)]
-
-    # Tombol untuk download kwitansi siswa yang dipilih
-    if not siswa_data.empty:
-        siswa_row = siswa_data.iloc[0]  # Ambil baris pertama
-        pdf = generate_receipt(siswa_row["Nama Siswa"], siswa_row["Kelas"], siswa_row["Bulan"], siswa_row["Jumlah Pembayaran"], siswa_row["Biaya SPP/Bulan"])
-        
-        pdf_output = BytesIO()
-        pdf.output(pdf_output)
-        pdf_output.seek(0)
-        st.download_button(
-            label="Download Kwitansi Siswa",
-            data=pdf_output,
-            file_name=f"Kwitansi_SPP_{siswa_row['Nama Siswa']}_{siswa_row['Bulan']}.pdf",
-            mime="application/pdf"
+# Setup for sidebar menu
+def setup_sidebar():
+    with st.sidebar:
+        return option_menu(
+            menu_title="Main Menu",
+            options=["Pembayaran SPP", "Laporan Keuangan", "Pengelolaan Gaji Guru"],
+            icons=["cash-stack", "bar-chart", "person-badge"],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"padding": "5!important", "background-color": "#f0f2f6"},
+                "icon": {"color": "orange", "font-size": "25px"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#eee"},
+                "nav-link-selected": {"background-color": "#4CAF50"},
+            }
         )
-    else:
-        st.warning("Tidak ada data yang sesuai untuk kwitansi.")
 
-elif selected == "Laporan Keuangan":
-    st.title("Laporan Keuangan")
-    st.write("Halaman untuk melihat laporan keuangan sekolah.")
+def main():
+    initialize_db()
+    init_session_state()
     
-    # Simulasi laporan keuangan dalam bentuk tabel
-    data = {
-        "Keterangan": ["SPP Kelas 1", "SPP Kelas 2", "Pembelian Buku"],
-        "Debet (Rp)": [500000, 600000, 200000],
-        "Kredit (Rp)": [0, 0, 100000],
-        "Tanggal": [datetime(2024, 1, 10), datetime(2024, 1, 12), datetime(2024, 1, 15)],
-    }
-    laporan_keuangan = pd.DataFrame(data)
-    st.table(laporan_keuangan)
-    
-    # Simulasi laporan keuangan dalam bentuk tabel
-    data = {
-        "Keterangan": ["SPP Kelas 1", "SPP Kelas 2", "Pembelian Buku"],
-        "Debet (Rp)": [500000, 600000, 200000],
-        "Kredit (Rp)": [0, 0, 100000],
-        "Tanggal": [datetime(2024, 1, 10), datetime(2024, 2, 5), datetime(2024, 3, 20)]
-    }
-    df = pd.DataFrame(data)
-    st.write(df)
-    
-    # Plot grafik debet dan kredit
-    df["Tanggal"] = pd.to_datetime(df["Tanggal"])
-    df.set_index("Tanggal", inplace=True)
-    df[["Debet (Rp)", "Kredit (Rp)"]].plot(kind="bar", stacked=True)
-    st.pyplot(plt)
+    selected = setup_sidebar()
 
-elif selected == "Pengelolaan Gaji Guru":
-    st.title("Pengelolaan Gaji Guru")
-    st.write("Halaman untuk mengelola pembayaran gaji guru.")
-    
-    # Simulasi input data gaji guru
-    with st.form("gaji_form"):
-        nama_guru = st.text_input("Nama Guru")
-        bulan = st.selectbox("Bulan Gaji", ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"])
-        gaji = st.number_input("Gaji Pokok (Rp)", min_value=0)
-        tunjangan = st.number_input("Tunjangan (Rp)", min_value=0)
-        
-        # Tombol submit
-        submitted_gaji = st.form_submit_button("Bayar Gaji")
-        
-        if submitted_gaji:
-            save_gaji_guru(nama_guru, bulan, gaji, tunjangan)
-            st.success(f"Gaji untuk {nama_guru} bulan {bulan} berhasil ditambahkan!")
+    if selected == "Pembayaran SPP":
+        st.title("Pembayaran SPP")
+        st.write("Halaman untuk pembayaran SPP siswa.")
+
+        with st.form("pembayaran_form"):
+            nama_siswa = st.text_input("Nama Siswa")
+            kelas = st.selectbox("Kelas", ["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"])
+            bulan = st.selectbox("Bulan", ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"])
+            biaya_spp = st.number_input("Biaya SPP per Bulan (Rp)", min_value=0)
+            jumlah = st.number_input("Jumlah Pembayaran (Rp)", min_value=0)
+
+            submitted = st.form_submit_button("Bayar")
+
+            if submitted:
+                if not nama_siswa or not kelas or not jumlah:
+                    st.warning("Semua field harus diisi!")
+                else:
+                    save_pembayaran_spp(nama_siswa, kelas, bulan, jumlah, biaya_spp)
+                    st.success(f"Pembayaran SPP untuk {nama_siswa} berhasil ditambahkan!")
+                    generate_receipt(nama_siswa, kelas, bulan, jumlah, biaya_spp, f"Kwitansi_SPP_{nama_siswa}_{bulan}")
+
+        st.subheader("Pencarian")
+        search_nama = st.text_input("Cari Nama Siswa")
+        search_kelas = st.selectbox("Cari Kelas", ["Semua"] + ["Kelas 1", "Kelas 2", "Kelas 3", "Kelas 4", "Kelas 5", "Kelas 6"])
+
+        filtered_data = st.session_state.pembayaran_spp
+        if search_nama:
+            filtered_data = filtered_data[filtered_data["Nama Siswa"].str.contains(search_nama, case=False)]
+        if search_kelas != "Semua":
+            filtered_data = filtered_data[filtered_data["Kelas"] == search_kelas]
+
+        filtered_data['Total Tagihan SPP 1 Tahun (Rp)'] = filtered_data['Biaya SPP/Bulan'] * 12
+        filtered_data['SPP yang Sudah Terbayar (Rp)'] = filtered_data.groupby(['Nama Siswa', 'Kelas'])['Jumlah Pembayaran'].transform('sum')
+        filtered_data['Sisa Tagihan SPP (Rp)'] = filtered_data['Total Tagihan SPP 1 Tahun (Rp)'] - filtered_data['SPP yang Sudah Terbayar (Rp)']
+
+        st.subheader("Data Pembayaran SPP")
+        st.table(filtered_data)
+
+        selected_siswa = st.selectbox("Pilih Siswa untuk Kwitansi", options=filtered_data["Nama Siswa"].unique())
+        selected_kelas = st.selectbox("Pilih Kelas", options=filtered_data["Kelas"].unique())
+
+        siswa_data = filtered_data[(filtered_data["Nama Siswa"] == selected_siswa) & (filtered_data["Kelas"] == selected_kelas)]
+
+        if not siswa_data.empty:
+            siswa_row = siswa_data.iloc[0]
+            generate_receipt(siswa_row["Nama Siswa"], siswa_row["Kelas"], siswa_row["Bulan"], siswa_row["Jumlah Pembayaran"], siswa_row["Biaya SPP/Bulan"], f"Kwitansi_SPP_{siswa_row['Nama Siswa']}_{siswa_row['Bulan']}")
+        else:
+            st.warning("Tidak ada data yang sesuai untuk kwitansi.")
+
+    elif selected == "Laporan Keuangan":
+        st.title("Laporan Keuangan")
+        st.write("Halaman untuk melihat laporan keuangan sekolah.")
+
+        data = {
+            "Keterangan": ["SPP Kelas 1", "SPP Kelas 2", "Pembelian Buku"],
+            "Debet (Rp)": [1000000, 1200000, 500000],
+            "Kredit (Rp)": [0, 0, 0]
+        }
+        df = pd.DataFrame(data)
+        st.table(df)
+
+        st.subheader("Grafik Laporan Keuangan")
+        plt.figure(figsize=(10, 6))
+        plt.bar(df["Keterangan"], df["Debet (Rp)"], color='blue', label='Debet')
+        plt.bar(df["Keterangan"], df["Kredit (Rp)"], color='red', label='Kredit', bottom=df["Debet (Rp)"])
+        plt.xlabel('Keterangan')
+        plt.ylabel('Jumlah (Rp)')
+        plt.title('Laporan Keuangan')
+        plt.legend()
+        st.pyplot(plt)
+
+    elif selected == "Pengelolaan Gaji Guru":
+        st.title("Pengelolaan Gaji Guru")
+        st.write("Halaman untuk mengelola gaji guru.")
+
+        with st.form("gaji_form"):
+            nama_guru = st.text_input("Nama Guru")
+            bulan = st.selectbox("Bulan", ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"])
+            gaji = st.number_input("Gaji Pokok (Rp)", min_value=0)
+            tunjangan = st.number_input("Tunjangan (Rp)", min_value=0)
+
+            submitted = st.form_submit_button("Simpan Gaji")
+
+            if submitted:
+                if not nama_guru or not bulan or not gaji:
+                    st.warning("Semua field harus diisi!")
+                else:
+                    save_gaji_guru(nama_guru, bulan, gaji, tunjangan)
+                    st.success(f"Gaji untuk {nama_guru} berhasil disimpan!")
+
+        st.subheader("Data Gaji Guru")
+        df_gaji = pd.read_csv('gaji_guru.csv')
+        st.table(df_gaji)
+
+if __name__ == "__main__":
+    main()
